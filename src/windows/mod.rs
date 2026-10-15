@@ -122,7 +122,7 @@ pub fn run(config: Config) -> Result<()> {
     let mut state = State::Idle;
     let mut recovery: Option<String> = None;
     eprintln!(
-        "Rust Dictate — Ctrl+Alt+Space: start/stop; Ctrl+Alt+Esc: cancel/clear; Ctrl+Alt+V: insert retained text."
+        "Saykey — Ctrl+Alt+Space: start/stop; Ctrl+Alt+Esc: cancel/clear; Ctrl+Alt+V: insert retained text."
     );
     eprintln!(
         "Audio is sent to {}. Cleanup: {}. Close this console to exit.",

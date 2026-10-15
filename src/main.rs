@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
-use rust_dictate::{audio::MAX_AUDIO_BYTES, config::Config, pipeline::Pipeline};
+use saykey::{audio::MAX_AUDIO_BYTES, config::Config, pipeline::Pipeline};
 use std::{io::Read, path::PathBuf};
 
 #[derive(Parser)]
@@ -50,7 +50,7 @@ fn main() -> Result<()> {
         }
         Command::Run => {
             #[cfg(windows)]
-            rust_dictate::windows::run(config)?;
+            saykey::windows::run(config)?;
             #[cfg(not(windows))]
             anyhow::bail!("Live dictation requires Windows. Use transcribe or check on this OS.");
         }

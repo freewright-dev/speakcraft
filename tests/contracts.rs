@@ -1,4 +1,4 @@
-use rust_dictate::{audio::encode_wav, config::Config, pipeline::Pipeline};
+use saykey::{audio::encode_wav, config::Config, pipeline::Pipeline};
 use std::{io::Cursor, thread, time::Duration};
 use tiny_http::{Header, Response, Server};
 
