@@ -2,14 +2,18 @@
 
 [README](../README.md) · [Usage](usage.md) · [Development](development.md) · [Changelog](../CHANGELOG.md)
 
-Copy [config.example.toml](../config.example.toml) to `config.toml`, edit it, then pass it explicitly:
+The desktop window lets you edit provider URL, model, language, and cleanup for the current session. It starts with an explicit `--config` file, otherwise `config.toml` beside `saykey.exe`, otherwise built-in defaults. Disable dictation to edit settings, then re-enable. Window edits are not written back to the file.
+
+For persistent non-secret settings, copy [config.example.toml](../config.example.toml) to `config.toml` beside the executable. Keep any existing file when upgrading. To open the desktop with a different file or validate it from PowerShell:
 
 ```powershell
 .\saykey.exe --config config.toml check
-.\saykey.exe --config config.toml run
+.\saykey.exe --config config.toml
 ```
 
-Configuration is read once at startup; restart after changes. Omitted fields use built-in defaults. Unknown fields and invalid TOML fail validation rather than being ignored. `config.toml` and `.env` are Git-ignored, but **the app does not read `.env` files**.
+Files are read once at startup; reopen the app after editing a file. Omitted fields use built-in defaults. Unknown fields and invalid TOML fail validation. The desktop displays file-load errors and shows defaults for review; CLI commands exit nonzero. `config.toml` and `.env` are Git-ignored, but **the app does not read `.env` files**. CLI subcommands (`run`, `transcribe`, `check`) still require `--config` to load a file.
+
+Paste a key into the masked desktop API-key field to use it for this session only. It is not saved or written into the process environment. Leave the field blank to use `api_key_env`; uncheck **Provider requires an API key** for an unauthenticated local server. Environment variables must exist before launching the app. Dictionary hints and recording limits are configured through the file, not the window.
 
 Existing configuration files from before the Saykey rename still work. Keep `config.toml` and your provider's environment-variable name unchanged; only the executable name in launch commands changes. Dictionary hints are ordinary text, so add `"Saykey"` if you want the provider to recognize the new app name.
 
@@ -41,7 +45,7 @@ cleanup_model = "gpt-4o-mini"
 max_recording_seconds = 60
 ```
 
-Supply the key through the [PowerShell prompt in the README](../README.md#quick-start-windows-archive). Cleanup costs an additional request and may alter meaning. An unsuccessful, malformed, or empty cleanup response falls back to the original transcript and reports a warning. No cleaned or raw transcript history is saved by live dictation.
+Supply the key in the desktop window or through the [PowerShell prompt for CLI commands](usage.md#command-reference). Cleanup costs an additional request and may alter meaning. An unsuccessful, malformed, or empty cleanup response falls back to the original transcript and reports a warning. No cleaned or raw transcript history is saved by live dictation.
 
 ## Local OpenAI-compatible provider
 

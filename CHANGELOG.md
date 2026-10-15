@@ -6,19 +6,25 @@ User-visible changes to Saykey. Versions match `Cargo.toml`. Local build entries
 
 ### Added
 
+- Windows desktop window opened by double-clicking `saykey.exe`, with provider/model/language settings, optional cleanup, enable/disable controls, and visible status/errors.
+- Masked session-only API-key entry without storing keys on disk or changing the process environment.
+- Automatic loading of `config.toml` beside the executable for desktop launch; explicit `--config` overrides it. CLI configuration loading is unchanged.
+- Desktop interaction tests for setup errors and service restart, plus session-credential and CLI compatibility contract tests.
 - Usage guide covering setup, shortcuts, cancellation, recovery, privacy, and troubleshooting.
 - Complete configuration reference with built-in defaults, local-provider examples, and required API contracts.
 - Development guide with native/cross-build instructions, automated checks, and a pending Windows verification checklist.
 
 ### Changed
 
+- Launching without a subcommand opens the desktop UI instead of printing help and exiting. CLI `run`, `transcribe`, `check`, help, and version remain available.
+- Minimize keeps dictation enabled; disabling or closing releases shortcuts and discards pending insertion and retained text. Saykey's own settings window is excluded from dictation targets.
 - Renamed the app to Saykey; the Rust package and executable are now `saykey` and `saykey.exe` on Windows. Existing configuration files, environment-variable names, and dictation shortcuts remain compatible. Update launch commands to the new executable path.
 - Reorganized the README around Windows quick start, features, build instructions, and links to detailed documentation.
 - Documented the difference between the original archive and the local Saykey build, upgrade steps, file-transcription usage, and unchanged configuration behavior.
 - Made the MVP status, API costs, cloud data flow, and unverified Windows desktop behavior explicit.
 - Capture now requests 16 kHz mono when the microphone offers it, falling back to the device default sample rate otherwise. Fallback audio is downmixed to mono without local resampling; provider sample-rate support determines compatibility. Echo cancellation, noise suppression, and auto gain remain at the Windows defaults.
 
-On 2026-10-15, the Saykey rename passed a native Windows x64 MSVC release build with Rust 1.97.1, all six contract tests, formatting, strict Clippy, and CLI help/version/configuration checks. Live microphone capture, shortcuts, text insertion, and speech-model accuracy remain unverified. No renamed archive or release was published.
+On 2026-10-15, the desktop build passed eight contract tests and a Windows desktop interaction test. Native default, enabled/cleanup, and missing-credential windows were rendered and inspected. Live microphone capture, hotkey-driven recording, text insertion into other apps, and speech-model accuracy remain unverified. No desktop archive, installer, or public release was published.
 
 ## 0.1.0 — 2026-10-14
 

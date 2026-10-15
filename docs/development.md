@@ -15,7 +15,9 @@ cargo build --release --locked
 .\target\release\saykey.exe --config config.example.toml check
 ```
 
-These commands build and validate configuration without uploading audio. Follow the [usage guide](usage.md) to set provider credentials and test real dictation. The Saykey rename was verified with a native Windows MSVC release build, all six integration tests, formatting, strict Clippy, and CLI help/version/configuration checks. Real Windows desktop dictation remains untested; the original Windows archive was cross-built with the GNU target on Linux.
+These commands build and validate configuration without uploading audio. Double-click `target\release\saykey.exe` to open the desktop window without a console. The binary uses the Windows GUI subsystem and attaches to a parent console for CLI arguments. Follow the [usage guide](usage.md) to set provider credentials and test real dictation. The original Windows archive was cross-built with the GNU target on Linux; the new desktop build is verified natively on Windows.
+
+`src/desktop.rs` owns the egui/eframe window and session settings. A worker thread runs the existing Windows hotkey loop and sends status/errors back to the window. Disabling or closing signals the worker to stop, release its shortcuts, discard capture/recovery state, and suppress pending insertion. Already-sent HTTP requests are not recalled. The settings window is excluded from dictation targets.
 
 The package rename produces `target\release\saykey.exe`; Cargo may leave an old `rust-dictate.exe` in the build directory. Use the new path rather than assuming the old executable was updated. The local build does not create a ZIP, checksum manifest, installer, or published release.
 
@@ -49,7 +51,9 @@ cargo clippy --target x86_64-pc-windows-gnu --all-targets --locked -- -D warning
 cargo build --release --locked --target x86_64-pc-windows-gnu
 ```
 
-The six integration tests in `tests/contracts.rs` exercise in-memory PCM/WAV encoding, recording boundaries, configuration validation, multipart upload fields, Unicode responses, optional cleanup, failure fallback, and rejection of malformed responses and redirects. HTTP fixtures bind ephemeral loopback ports. They use no real microphone, credentials, paid API, or speech model.
+The eight integration tests in `tests/contracts.rs` exercise in-memory PCM/WAV encoding, recording boundaries, configuration validation, multipart upload fields, Unicode responses, optional cleanup, failure fallback, rejection of malformed responses and redirects, session-key authentication, and CLI output/exit codes. HTTP fixtures bind ephemeral loopback ports. They use no real microphone, credentials, paid API, or speech model.
+
+On Windows, the egui accessibility test in `src/desktop.rs` clicks controls and types into fields to check missing-key errors, invalid language settings, enabling/disabling dictation, and re-enabling after shortcut release. Close other running Saykey dictation sessions before running it: the test reserves the real global shortcuts briefly, but does not record or submit audio. Default, enabled/cleanup, and missing-credential native windows were also rendered and inspected locally.
 
 A passing API test confirms transport and response handling, **not** transcription accuracy, model adherence to cleanup instructions, or dictation in a Windows application. The existing Linux CLI smoke check also confirmed exact Unicode stdout through a local HTTP fixture. Cross-compilation only confirms that Windows code compiles and links.
 

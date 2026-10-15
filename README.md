@@ -1,13 +1,14 @@
 # Saykey
 
-**Speak, then insert text where you work.** Saykey is a Windows-first Rust console app: press a global shortcut to record, press it again to transcribe, and insert the result into the focused application. Optional AI cleanup asks the model to remove fillers and handle spoken corrections.
+**Speak, then insert text where you work.** Saykey is a Windows desktop dictation app built with Rust. Double-click `saykey.exe` to configure your provider and enable dictation. Press a global shortcut to record, press it again to transcribe, and insert the result into the focused application. Optional AI cleanup asks the model to remove fillers and handle spoken corrections.
 
-**Status: 0.1.0 MVP, not a production release.** The native Windows x64 release build, all six contract tests, formatting, strict Clippy, and CLI help/version/configuration checks pass. The initial MVP was also cross-built and tested on Linux. Real Windows microphone capture, shortcuts, text insertion, and speech recognition quality still require desktop testing.
+**Status: 0.1.0 MVP with unreleased desktop UI.** The native Windows x64 build, eight contract tests, and desktop setup/start/stop tests pass. The default, enabled, and missing-credential windows were rendered and inspected. Real microphone capture, speech recognition quality, and insertion into other apps still require end-to-end testing. No new public release or installer has been published.
 
 This is an independent implementation inspired by Wispr Flow's public behavior, not its proprietary source, private APIs, branding, or model weights. It is not affiliated with Wispr Flow or feature-equivalent to it.
 
 ## Features
 
+- Desktop window with provider settings, a masked session-only API key, enable/disable controls, status, and errors.
 - Global start/stop, cancel, and transcript-recovery shortcuts on Windows.
 - Default-microphone recording with in-memory mono WAV encoding.
 - OpenAI-compatible transcription, language selection, and dictionary hints.
@@ -18,25 +19,21 @@ This is an independent implementation inspired by Wispr Flow's public behavior, 
 
 No tray app, overlay, installer, push-to-talk mode, or offline model is included. See [limitations and privacy](docs/usage.md#privacy-and-limitations) before dictating sensitive content.
 
-## Quick start: Windows archive
+## Quick start: Windows desktop
 
-Use Windows 10/11 x64. If you have a supplied Windows ZIP, extract it and open PowerShell in the extracted folder. The executable is unsigned; [verify the build](docs/usage.md#install-and-start) before running it. No Rust installation or administrator privileges are required for a prebuilt executable.
+Use Windows 10/11 x64. [Build from source](#build-from-source) to get the current `target\release\saykey.exe`. If you have a ZIP containing this desktop build, extract it first. Older archives contain the console-only app. The executable is unsigned; use only a build you trust. No Rust installation or administrator privileges are required to run a prebuilt executable.
 
-The Saykey rename is currently a local source/build change, not a published release or a newly packaged archive. To use the renamed executable, [build from source](#build-from-source). An older archive may still contain `rust-dictate.exe`; the [usage guide](docs/usage.md#install-and-start) explains the naming change.
+1. Double-click **`saykey.exe`**. No terminal or command-line arguments are needed.
+2. Review the **Provider URL** and **Transcription model**. The defaults use OpenAI.
+3. Paste your provider's key into **API key — this session only**. It is masked and is not saved to disk. A compatible local server without authentication can use the unchecked **Provider requires an API key** option.
+4. Optionally set a language such as `de` or `en`, or enable AI cleanup.
+5. Click **Enable dictation**, wait for **Ready**, then focus a text field in another app and use the shortcuts below.
 
-You need your own speech provider credentials. The default is OpenAI, which may charge for API usage. Audio is sent to that provider after recording stops; cleanup sends the transcript in a second request when enabled.
+You need your own speech provider credentials. Audio is sent to that provider after recording stops; cleanup sends the transcript in a second request when enabled. Provider charges and privacy policies apply. Enabling dictation registers shortcuts but does not start recording or verify your key with the provider.
 
-```powershell
-Copy-Item config.example.toml config.toml
-$secret = Read-Host "OpenAI API key" -AsSecureString
-$env:OPENAI_API_KEY = [System.Net.NetworkCredential]::new("", $secret).Password
-.\saykey.exe --config config.toml check
-.\saykey.exe --config config.toml run
-```
+Settings edited in the window apply to the current session. For persistent non-secret defaults, place a `config.toml` beside the executable; desktop launch reads it automatically. Keep existing configuration files when upgrading. See [configuration](docs/configuration.md) for file settings and environment-variable credentials.
 
-Copy the configuration only on first setup; keep an existing `config.toml` when upgrading. The key prompt avoids placing the key itself in shell history. It still exists in this process environment; do not share it or put it in the TOML file.
-
-Allow desktop microphone access in Windows privacy settings and select the default input in Sound settings. Leave the console running, focus Notepad, press **Ctrl+Alt+Space**, speak, then press the shortcut again and release the keys. Keep the same text field focused until processing finishes.
+Allow desktop microphone access in Windows privacy settings and select the default input in Sound settings. Focus Notepad, press **Ctrl+Alt+Space**, speak, then press the shortcut again and release the keys. Keep the same text field focused until processing finishes; returning to Saykey during processing counts as a focus change.
 
 | Shortcut | Action |
 | --- | --- |
@@ -44,7 +41,7 @@ Allow desktop microphone access in Windows privacy settings and select the defau
 | Ctrl+Alt+Esc | Cancel and clear retained text |
 | Ctrl+Alt+V | Retry insertion of retained text into the current field |
 
-Close the console to exit. Cancellation during processing suppresses insertion but cannot retract API requests already underway.
+Minimize Saykey to keep dictating. **Disable dictation** releases the shortcuts and discards pending insertion and retained text; closing the window exits. There is no tray icon. Cancellation cannot retract API requests already underway.
 
 ## Build from source
 
@@ -58,7 +55,7 @@ cargo build --release --locked
 
 Run these commands from the directory containing `Cargo.toml`; the checkout folder does not need to be named `saykey`. The version command prints `saykey 0.1.0`, and `check` validates configuration without opening the microphone or contacting a provider.
 
-Follow the quick start above, replacing `.\saykey.exe` with `.\target\release\saykey.exe`. Pass `--config config.toml` explicitly: an adjacent configuration file is not loaded automatically. See the [development guide](docs/development.md) for Linux cross-builds and tests.
+Double-click `target\release\saykey.exe` to open the desktop window. The existing `run`, `transcribe`, and `check` CLI commands remain available; unlike desktop launch, they require `--config config.toml` to load a file. See the [usage guide](docs/usage.md#command-reference) and [development guide](docs/development.md) for CLI commands, cross-builds, and tests.
 
 ## Documentation
 
