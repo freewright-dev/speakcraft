@@ -5,8 +5,8 @@
 Copy [config.example.toml](../config.example.toml) to `config.toml`, edit it, then pass it explicitly:
 
 ```powershell
-.\rust-dictate.exe --config config.toml check
-.\rust-dictate.exe --config config.toml run
+.\saykey.exe --config config.toml check
+.\saykey.exe --config config.toml run
 ```
 
 Configuration is read once at startup; restart after changes. Omitted fields use built-in defaults. Unknown fields and invalid TOML fail validation rather than being ignored. `config.toml` and `.env` are Git-ignored, but **the app does not read `.env` files**.
@@ -33,7 +33,7 @@ base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"
 transcription_model = "whisper-1"
 language = "de"
-dictionary = ["Zürich", "Rust Dictate", "CPAL"]
+dictionary = ["Zürich", "Saykey", "CPAL"]
 cleanup = true
 cleanup_model = "gpt-4o-mini"
 max_recording_seconds = 60

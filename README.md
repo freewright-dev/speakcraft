@@ -1,4 +1,4 @@
-# Rust Dictate
+# Saykey
 
 A Windows-first **Rust console app** that records your voice with a global shortcut, transcribes it, and inserts text into the focused application. Optional AI cleanup removes fillers and handles spoken corrections.
 
@@ -28,8 +28,8 @@ You need your own speech provider credentials. The default is OpenAI, which may 
 Copy-Item config.example.toml config.toml
 $secret = Read-Host "OpenAI API key" -AsSecureString
 $env:OPENAI_API_KEY = [System.Net.NetworkCredential]::new("", $secret).Password
-.\rust-dictate.exe --config config.toml check
-.\rust-dictate.exe --config config.toml run
+.\saykey.exe --config config.toml check
+.\saykey.exe --config config.toml run
 ```
 
 Copy the configuration only on first setup; keep an existing `config.toml` when upgrading. The key prompt avoids placing the key itself in shell history. It still exists in this process environment; do not share it or put it in the TOML file.
@@ -52,7 +52,7 @@ Install stable Rust through [rustup](https://rustup.rs/) and Visual Studio Build
 cargo build --release --locked
 ```
 
-Follow the quick start above, replacing `.\rust-dictate.exe` with `.\target\release\rust-dictate.exe`. See the [development guide](docs/development.md) for Linux cross-builds and tests.
+Follow the quick start above, replacing `.\saykey.exe` with `.\target\release\saykey.exe`. See the [development guide](docs/development.md) for Linux cross-builds and tests.
 
 ## Documentation
 
@@ -68,4 +68,4 @@ Follow the quick start above, replacing `.\rust-dictate.exe` with `.\target\rele
 - [Wispr Flow setup guide](https://docs.wisprflow.ai/articles/3152211871-setup-guide): Windows permissions and shortcut-driven dictation.
 - [OpenAI transcription API](https://platform.openai.com/docs/api-reference/audio/createTranscription): multipart request and JSON response contract.
 
-These references describe public behavior, not Wispr Flow's internal architecture. Rust Dictate is licensed under the [MIT License](LICENSE).
+These references describe public behavior, not Wispr Flow's internal architecture. Saykey is licensed under the [MIT License](LICENSE).

@@ -9,13 +9,13 @@ The live dictation target is Windows 10/11 x64. Extract the supplied Windows ZIP
 Compare the executable's SHA-256 digest with the entry in the archive's `SHA256SUMS.txt`:
 
 ```powershell
-Get-FileHash .\rust-dictate.exe -Algorithm SHA256
+Get-FileHash .\saykey.exe -Algorithm SHA256
 Get-Content .\SHA256SUMS.txt
 ```
 
 A matching checksum detects corruption, not publisher authenticity: both files came from the same archive. Only run code from a source you trust. Alternatively, [build from source](development.md#windows-build).
 
-Follow the [README quick start](../README.md#quick-start-windows-archive) to copy the example configuration and enter your API key. Use the same PowerShell session to launch the app; the documented environment variable is not persisted to future sessions. If you built from source, substitute `.\target\release\rust-dictate.exe` for `.\rust-dictate.exe` in these examples.
+Follow the [README quick start](../README.md#quick-start-windows-archive) to copy the example configuration and enter your API key. Use the same PowerShell session to launch the app; the documented environment variable is not persisted to future sessions. If you built from source, substitute `.\target\release\saykey.exe` for `.\saykey.exe` in these examples.
 
 In Windows settings:
 
@@ -53,13 +53,13 @@ If a focus change is detected or insertion fails, the console reports that text 
 
 | Command | Behavior |
 | --- | --- |
-| `rust-dictate --config config.toml run` | Windows live dictation; reads credentials and reserves shortcuts at startup |
-| `rust-dictate --config config.toml transcribe recording.wav` | Upload an existing file and print the transcript to stdout |
-| `rust-dictate --config config.toml check` | Validate configuration without contacting a provider or opening the microphone |
-| `rust-dictate --help` | Show commands and options |
-| `rust-dictate --version` | Show the package version |
+| `saykey --config config.toml run` | Windows live dictation; reads credentials and reserves shortcuts at startup |
+| `saykey --config config.toml transcribe recording.wav` | Upload an existing file and print the transcript to stdout |
+| `saykey --config config.toml check` | Validate configuration without contacting a provider or opening the microphone |
+| `saykey --help` | Show commands and options |
+| `saykey --version` | Show the package version |
 
-Use `.\rust-dictate.exe` as the command in Windows PowerShell. Paths are relative to the current working directory unless absolute. `--config` can appear before or after the subcommand. Omitting it uses built-in defaults; an adjacent `config.toml` is **not** loaded automatically.
+Use `.\saykey.exe` as the command in Windows PowerShell. Paths are relative to the current working directory unless absolute. `--config` can appear before or after the subcommand. Omitting it uses built-in defaults; an adjacent `config.toml` is **not** loaded automatically.
 
 `transcribe` accepts nonempty files up to 24,000,000 bytes. Formats depend on the provider; the app does not convert existing files. It uses the same optional cleanup setting as live dictation, but never inserts text into another application. Warnings go to stderr; the transcript goes to stdout. Redirect stdout only if you intend to save that text.
 
@@ -85,7 +85,7 @@ Use `.\rust-dictate.exe` as the command in Windows PowerShell. Paths are relativ
 | No default microphone or access denied | Check default input, desktop microphone permissions, device connection, and other apps holding the device. |
 | Unsupported microphone sample format | The capture path accepts float32, signed 16-bit, or unsigned 16-bit samples. Try another default device or its supported Windows format settings. |
 | Too short or no audible input | Speak for more than 200 ms; check mute, input level, and selected default microphone. |
-| Cannot register a shortcut | Close another Rust Dictate instance or another app using Ctrl+Alt+Space, Ctrl+Alt+Esc, or Ctrl+Alt+V. |
+| Cannot register a shortcut | Close another Saykey instance or another app using Ctrl+Alt+Space, Ctrl+Alt+Esc, or Ctrl+Alt+V. |
 | HTTP 401/403 | Check provider credentials, API access, and model permissions. |
 | HTTP 404 | Check the API base URL and configured model. The app appends `/audio/transcriptions` and `/chat/completions`. |
 | HTTP 429 or 5xx | Check quota or provider availability and retry later. The app does not retry failed dictations automatically. |

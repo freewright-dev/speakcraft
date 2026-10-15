@@ -10,11 +10,11 @@ Install stable Rust using [rustup](https://rustup.rs/) and Visual Studio Build T
 
 ```powershell
 cargo build --release --locked
-.\target\release\rust-dictate.exe --help
-.\target\release\rust-dictate.exe --config config.example.toml check
+.\target\release\saykey.exe --help
+.\target\release\saykey.exe --config config.example.toml check
 ```
 
-These commands build and validate configuration without uploading audio. Follow the [usage guide](usage.md) to set provider credentials and test real dictation. A native MSVC build and desktop smoke test have not yet been run in this project; the existing Windows artifact was cross-built with the GNU target on Linux.
+These commands build and validate configuration without uploading audio. Follow the [usage guide](usage.md) to set provider credentials and test real dictation. The Saykey rename was verified with a native Windows MSVC release build, all six integration tests, formatting, strict Clippy, and CLI help/version/configuration checks. Real Windows desktop dictation remains untested; the original Windows archive was cross-built with the GNU target on Linux.
 
 ## Linux development and Windows cross-build
 
@@ -29,7 +29,7 @@ rustup target add x86_64-pc-windows-gnu
 cargo build --release --locked --target x86_64-pc-windows-gnu
 ```
 
-The output is `target/x86_64-pc-windows-gnu/release/rust-dictate.exe`. The source repository also includes an executable `.agents/setup` script for Amp's Linux orbs. It installs missing cross-build tools, prepares Rust components, and fetches locked dependencies. It is idempotent and does not start the app or configure provider credentials. It is stored locally with this project; it is not configured on a remote project's default branch.
+The output is `target/x86_64-pc-windows-gnu/release/saykey.exe`. The source repository also includes an executable `.agents/setup` script for Amp's Linux orbs. It installs missing cross-build tools, prepares Rust components, and fetches locked dependencies. It is idempotent and does not start the app or configure provider credentials. It is stored locally with this project; it is not configured on a remote project's default branch.
 
 ## Automated checks
 

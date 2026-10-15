@@ -1,6 +1,6 @@
 # Changelog
 
-User-visible changes to Rust Dictate. Versions match `Cargo.toml`. Local build entries do not imply a published release, signed installer, or completed Windows desktop verification.
+User-visible changes to Saykey. Versions match `Cargo.toml`. Local build entries do not imply a published release, signed installer, or completed Windows desktop verification.
 
 ## Unreleased
 
@@ -12,6 +12,7 @@ User-visible changes to Rust Dictate. Versions match `Cargo.toml`. Local build e
 
 ### Changed
 
+- Renamed the app to Saykey; the Rust package and executable are now `saykey` and `saykey.exe` on Windows.
 - Reorganized the README around Windows quick start, features, build instructions, and links to detailed documentation.
 - Made the MVP status, API costs, cloud data flow, and unverified Windows behavior explicit.
 - Capture now requests 16 kHz mono when the microphone offers it, falling back to the device default sample rate otherwise. Speech recognition resamples to 16 kHz regardless, so this trims upload size without changing behavior on drivers that expose only their mix format. Echo cancellation, noise suppression, and auto gain remain at the Windows defaults.
