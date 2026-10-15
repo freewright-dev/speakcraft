@@ -1,8 +1,8 @@
 # Saykey
 
-A Windows-first **Rust console app** that records your voice with a global shortcut, transcribes it, and inserts text into the focused application. Optional AI cleanup removes fillers and handles spoken corrections.
+**Speak, then insert text where you work.** Saykey is a Windows-first Rust console app: press a global shortcut to record, press it again to transcribe, and insert the result into the focused application. Optional AI cleanup asks the model to remove fillers and handle spoken corrections.
 
-**Status: 0.1.0 MVP, not a production release.** The Windows x64 executable cross-builds successfully, and the audio/configuration/API transport tests pass on Linux. Real Windows microphone capture, shortcuts, text insertion, and speech recognition quality still require desktop testing.
+**Status: 0.1.0 MVP, not a production release.** The native Windows x64 release build, all six contract tests, formatting, strict Clippy, and CLI help/version/configuration checks pass. The initial MVP was also cross-built and tested on Linux. Real Windows microphone capture, shortcuts, text insertion, and speech recognition quality still require desktop testing.
 
 This is an independent implementation inspired by Wispr Flow's public behavior, not its proprietary source, private APIs, branding, or model weights. It is not affiliated with Wispr Flow or feature-equivalent to it.
 
@@ -20,7 +20,9 @@ No tray app, overlay, installer, push-to-talk mode, or offline model is included
 
 ## Quick start: Windows archive
 
-Use Windows 10/11 x64. Extract the supplied Windows ZIP, then open PowerShell in the extracted folder. The executable is unsigned; [verify the build](docs/usage.md#install-and-start) before running it. No Rust installation or administrator privileges are required for the prebuilt executable.
+Use Windows 10/11 x64. If you have a supplied Windows ZIP, extract it and open PowerShell in the extracted folder. The executable is unsigned; [verify the build](docs/usage.md#install-and-start) before running it. No Rust installation or administrator privileges are required for a prebuilt executable.
+
+The Saykey rename is currently a local source/build change, not a published release or a newly packaged archive. To use the renamed executable, [build from source](#build-from-source). An older archive may still contain `rust-dictate.exe`; the [usage guide](docs/usage.md#install-and-start) explains the naming change.
 
 You need your own speech provider credentials. The default is OpenAI, which may charge for API usage. Audio is sent to that provider after recording stops; cleanup sends the transcript in a second request when enabled.
 
@@ -50,9 +52,13 @@ Install stable Rust through [rustup](https://rustup.rs/) and Visual Studio Build
 
 ```powershell
 cargo build --release --locked
+.\target\release\saykey.exe --version
+.\target\release\saykey.exe --config config.example.toml check
 ```
 
-Follow the quick start above, replacing `.\saykey.exe` with `.\target\release\saykey.exe`. See the [development guide](docs/development.md) for Linux cross-builds and tests.
+Run these commands from the directory containing `Cargo.toml`; the checkout folder does not need to be named `saykey`. The version command prints `saykey 0.1.0`, and `check` validates configuration without opening the microphone or contacting a provider.
+
+Follow the quick start above, replacing `.\saykey.exe` with `.\target\release\saykey.exe`. Pass `--config config.toml` explicitly: an adjacent configuration file is not loaded automatically. See the [development guide](docs/development.md) for Linux cross-builds and tests.
 
 ## Documentation
 

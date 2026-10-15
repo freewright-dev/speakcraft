@@ -11,6 +11,8 @@ Copy [config.example.toml](../config.example.toml) to `config.toml`, edit it, th
 
 Configuration is read once at startup; restart after changes. Omitted fields use built-in defaults. Unknown fields and invalid TOML fail validation rather than being ignored. `config.toml` and `.env` are Git-ignored, but **the app does not read `.env` files**.
 
+Existing configuration files from before the Saykey rename still work. Keep `config.toml` and your provider's environment-variable name unchanged; only the executable name in launch commands changes. Dictionary hints are ordinary text, so add `"Saykey"` if you want the provider to recognize the new app name.
+
 ## Fields and built-in defaults
 
 | Field | Type | Default | Contract |
@@ -64,5 +66,7 @@ Both APIs use the same `base_url` and credentials; separate speech and cleanup p
 | Cleanup | `POST {base_url}/chat/completions`, JSON `model` and `messages` with editor instructions in the system message and dictated text in the user message | A 2xx JSON object whose first `choices` item has nonempty `message.content` after trimming |
 
 Live audio is mono signed 16-bit PCM WAV, captured at 16 kHz when the microphone supports it and otherwise at the device's default sample rate (downmixed to mono either way). Files are uploaded with their filename and `application/octet-stream` content type. No streaming response or streaming dictation is requested.
+
+Saykey does not resample fallback recordings before upload; the provider must accept their sample rate. It does not configure echo cancellation, noise suppression, or automatic gain control: those remain under Windows/device control. Existing files passed to `transcribe` are uploaded unchanged.
 
 Connection timeout is 10 seconds; each request has a 90-second overall timeout. Redirects are not followed. Transcription failures return an error; optional cleanup failures retain the raw transcript. There is no application-level retry loop. These timeouts, the 24 MB upload cap, and shortcuts are fixed in code, not TOML settings.

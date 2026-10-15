@@ -4,9 +4,9 @@
 
 ## Install and start
 
-The live dictation target is Windows 10/11 x64. Extract the supplied Windows ZIP and open PowerShell in that folder. Do not run the executable directly inside the ZIP. The app is unsigned and has no installer, auto-updater, or background service.
+The live dictation target is Windows 10/11 x64. If you have a supplied Windows ZIP, extract it and open PowerShell in that folder. Do not run the executable directly inside the ZIP. The app is unsigned and has no installer, auto-updater, or background service. No new Saykey archive or public release was produced by the rename; [build from source](development.md#windows-build) to obtain `saykey.exe`.
 
-Compare the executable's SHA-256 digest with the entry in the archive's `SHA256SUMS.txt`:
+For an archive that includes `saykey.exe` and `SHA256SUMS.txt`, compare the executable's SHA-256 digest with its checksum entry:
 
 ```powershell
 Get-FileHash .\saykey.exe -Algorithm SHA256
@@ -14,6 +14,8 @@ Get-Content .\SHA256SUMS.txt
 ```
 
 A matching checksum detects corruption, not publisher authenticity: both files came from the same archive. Only run code from a source you trust. Alternatively, [build from source](development.md#windows-build).
+
+Older archives use `rust-dictate.exe`; use that filename for their commands and checksum checks. A locally rebuilt `saykey.exe` will not match an older binary's checksum. When upgrading, close the old instance, keep your existing `config.toml`, and update any launch commands or shortcuts to the new executable path. The configuration keys, `OPENAI_API_KEY` variable, and dictation shortcuts are unchanged; no configuration migration is required.
 
 Follow the [README quick start](../README.md#quick-start-windows-archive) to copy the example configuration and enter your API key. Use the same PowerShell session to launch the app; the documented environment variable is not persisted to future sessions. If you built from source, substitute `.\target\release\saykey.exe` for `.\saykey.exe` in these examples.
 
@@ -62,6 +64,14 @@ If a focus change is detected or insertion fails, the console reports that text 
 Use `.\saykey.exe` as the command in Windows PowerShell. Paths are relative to the current working directory unless absolute. `--config` can appear before or after the subcommand. Omitting it uses built-in defaults; an adjacent `config.toml` is **not** loaded automatically.
 
 `transcribe` accepts nonempty files up to 24,000,000 bytes. Formats depend on the provider; the app does not convert existing files. It uses the same optional cleanup setting as live dictation, but never inserts text into another application. Warnings go to stderr; the transcript goes to stdout. Redirect stdout only if you intend to save that text.
+
+For example, transcribe an existing file after configuring provider credentials:
+
+```powershell
+.\saykey.exe --config config.toml transcribe .\recording.wav
+```
+
+This command uploads the file to the configured provider and may incur charges; it is not an offline validation command.
 
 `check` does not verify the key, provider, microphone, shortcuts, or application compatibility. Startup/command failures exit nonzero. Live dictation logs individual recording or provider errors and remains available for another attempt.
 

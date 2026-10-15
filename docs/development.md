@@ -2,7 +2,7 @@
 
 [README](../README.md) · [Usage](usage.md) · [Configuration](configuration.md) · [Changelog](../CHANGELOG.md)
 
-Use the source archive or local repository, not just the prebuilt executable. Run commands from the directory containing `Cargo.toml`. Dependencies are recorded in `Cargo.lock`; keep `--locked` for repeatable dependency resolution. The initial MVP was built with Rust 1.99.0; no older minimum toolchain version has been verified.
+Use the source archive or local repository, not just the prebuilt executable. Run commands from the directory containing `Cargo.toml`; its folder name does not affect the `saykey` package or executable name. Dependencies are recorded in `Cargo.lock`; keep `--locked` for repeatable dependency resolution. The initial MVP was built with Rust 1.99.0 on Linux. The native Windows checks below passed with Rust 1.97.1 (`x86_64-pc-windows-msvc`); a minimum supported Rust version has not been established.
 
 ## Windows build
 
@@ -11,10 +11,13 @@ Install stable Rust using [rustup](https://rustup.rs/) and Visual Studio Build T
 ```powershell
 cargo build --release --locked
 .\target\release\saykey.exe --help
+.\target\release\saykey.exe --version
 .\target\release\saykey.exe --config config.example.toml check
 ```
 
 These commands build and validate configuration without uploading audio. Follow the [usage guide](usage.md) to set provider credentials and test real dictation. The Saykey rename was verified with a native Windows MSVC release build, all six integration tests, formatting, strict Clippy, and CLI help/version/configuration checks. Real Windows desktop dictation remains untested; the original Windows archive was cross-built with the GNU target on Linux.
+
+The package rename produces `target\release\saykey.exe`; Cargo may leave an old `rust-dictate.exe` in the build directory. Use the new path rather than assuming the old executable was updated. The local build does not create a ZIP, checksum manifest, installer, or published release.
 
 ## Linux development and Windows cross-build
 
