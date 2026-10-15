@@ -53,6 +53,71 @@ fn wav() -> Vec<u8> {
 }
 
 #[test]
+fn session_credentials_authenticate_without_an_environment_variable() {
+    let server = Server::http("127.0.0.1:0").unwrap();
+    let config = Config {
+        base_url: format!("http://{}/v1", server.server_addr()),
+        api_key_env: "SAYKEY_TEST_MISSING_CREDENTIAL".into(),
+        ..Config::default()
+    };
+    assert!(Pipeline::with_api_key(config.clone(), None).is_err());
+    assert!(Pipeline::with_api_key(config.clone(), Some(" ".into())).is_err());
+    let worker = thread::spawn(move || {
+        let request = server
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap();
+        assert!(request.headers().iter().any(|header| {
+            header.field.equiv("Authorization")
+                && header.value.as_str() == "Bearer session-test-key"
+        }));
+        request
+            .respond(Response::from_string(
+                r#"{"text":"Session credential accepted."}"#,
+            ))
+            .unwrap();
+    });
+    let result = Pipeline::with_api_key(config, Some("session-test-key".into()))
+        .unwrap()
+        .transcribe(wav(), "voice.wav")
+        .unwrap();
+    assert_eq!(result.text, "Session credential accepted.");
+    worker.join().unwrap();
+}
+
+#[test]
+fn cli_commands_keep_output_and_exit_codes_with_the_desktop_executable() {
+    let version = format!("saykey {}", env!("CARGO_PKG_VERSION"));
+    for (args, expected) in [
+        (vec!["--version"], version.as_str()),
+        (vec!["--help"], "transcribe"),
+        (
+            vec!["--config", "config.example.toml", "check"],
+            "Configuration valid.",
+        ),
+    ] {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_saykey"))
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .env_remove("OPENAI_API_KEY")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{:?}", output);
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains(expected),
+            "{:?}",
+            output
+        );
+    }
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_saykey"))
+        .arg("not-a-command")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unrecognized subcommand"));
+}
+
+#[test]
 fn wav_preserves_pcm_and_rejects_silence_or_short_recordings() {
     let samples = [-1200, 2345, -32768, 32767].repeat(800);
     let bytes = encode_wav(&samples, 16_000).unwrap();

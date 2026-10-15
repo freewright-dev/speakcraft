@@ -9,12 +9,17 @@ use capture::Capture;
 use std::{
     mem::size_of,
     ptr::null_mut,
-    sync::{Arc, mpsc},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     thread,
     time::{Duration, Instant},
 };
 use windows_sys::Win32::{
     Foundation::HWND,
+    System::Threading::GetCurrentProcessId,
     UI::{
         Input::KeyboardAndMouse::{
             GetAsyncKeyState, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
@@ -86,7 +91,12 @@ impl Target {
             if window.is_null() {
                 return None;
             }
-            let tid = GetWindowThreadProcessId(window, null_mut());
+            let mut process_id = 0;
+            let tid = GetWindowThreadProcessId(window, &mut process_id);
+            // Never record for or insert into Saykey's own settings/API-key fields.
+            if process_id == GetCurrentProcessId() {
+                return None;
+            }
             let mut info: GUITHREADINFO = std::mem::zeroed();
             info.cbSize = size_of::<GUITHREADINFO>() as u32;
             if tid == 0 || GetGUIThreadInfo(tid, &mut info) == 0 || info.hwndFocus.is_null() {
@@ -116,22 +126,34 @@ enum State {
 }
 
 pub fn run(config: Config) -> Result<()> {
-    let pipeline = Arc::new(Pipeline::new(config.clone())?);
+    let pipeline = Pipeline::new(config.clone())?;
+    run_controlled(config, pipeline, &AtomicBool::new(false), |message| {
+        eprintln!("{message}");
+    })
+}
+
+pub(crate) fn run_controlled(
+    config: Config,
+    pipeline: Pipeline,
+    stopped: &AtomicBool,
+    report: impl Fn(&str),
+) -> Result<()> {
+    let pipeline = Arc::new(pipeline);
     let _hotkeys = Hotkeys::register()?;
     let (tx, rx) = mpsc::channel::<Result<Transcript>>();
     let mut state = State::Idle;
     let mut recovery: Option<String> = None;
-    eprintln!(
-        "Saykey — Ctrl+Alt+Space: start/stop; Ctrl+Alt+Esc: cancel/clear; Ctrl+Alt+V: insert retained text."
+    report(
+        "Saykey — Ctrl+Alt+Space: start/stop; Ctrl+Alt+Esc: cancel/clear; Ctrl+Alt+V: insert retained text.",
     );
-    eprintln!(
-        "Audio is sent to {}. Cleanup: {}. Close this console to exit.",
+    report(&format!(
+        "Audio is sent to {}. Cleanup: {}.",
         config.base_url, config.cleanup
+    ));
+    report(
+        "Ready. Focus an editable text field before starting. Do not change fields until insertion finishes.",
     );
-    eprintln!(
-        "Ready. Focus an editable text field before starting. Do not change fields until insertion finishes."
-    );
-    loop {
+    while !stopped.load(Ordering::Acquire) {
         if let State::Recording {
             target,
             focus_changed,
@@ -148,7 +170,7 @@ pub fn run(config: Config) -> Result<()> {
         let mut message: MSG = unsafe { std::mem::zeroed() };
         // SAFETY: message is a valid writable MSG; no window procedure is installed.
         while unsafe { PeekMessageW(&mut message, null_mut(), 0, 0, PM_REMOVE) } != 0 {
-            if message.message == WM_QUIT {
+            if message.message == WM_QUIT || stopped.load(Ordering::Acquire) {
                 return Ok(());
             }
             if message.message != WM_HOTKEY {
@@ -163,8 +185,8 @@ pub fn run(config: Config) -> Result<()> {
                             focus_changed,
                             ..
                         } => {
-                            eprintln!(
-                                "Canceled. Waiting for in-flight request to finish; its result will be discarded."
+                            report(
+                                "Canceled. Waiting for in-flight request to finish; its result will be discarded.",
                             );
                             State::Processing {
                                 target,
@@ -173,7 +195,7 @@ pub fn run(config: Config) -> Result<()> {
                             }
                         }
                         _ => {
-                            eprintln!("Canceled; audio and retained text discarded.");
+                            report("Canceled; audio and retained text discarded.");
                             State::Idle
                         }
                     };
@@ -189,32 +211,34 @@ pub fn run(config: Config) -> Result<()> {
                                         started: Instant::now(),
                                         focus_changed: false,
                                     };
-                                    eprintln!(
-                                        "Recording… Ctrl+Alt+Space to finish, Ctrl+Alt+Esc to discard."
+                                    report(
+                                        "Recording… Ctrl+Alt+Space to finish, Ctrl+Alt+Esc to discard.",
                                     );
                                 }
-                                Err(error) => eprintln!("Microphone error: {error:#}"),
+                                Err(error) => report(&format!("Microphone error: {error:#}")),
                             }
                         } else {
-                            eprintln!("Focus a text field first.");
+                            report("Focus a text field in another application first.");
                         }
                     }
-                    State::Recording { .. } => finish_recording(&mut state, &pipeline, &tx),
-                    State::Processing { .. } => eprintln!("Still processing; wait or cancel."),
+                    State::Recording { .. } => {
+                        finish_recording(&mut state, &pipeline, &tx, &report)
+                    }
+                    State::Processing { .. } => report("Still processing; wait or cancel."),
                 },
                 RECOVER if matches!(state, State::Idle) => {
                     if let Some(text) = &recovery {
                         if let Some(target) = Target::current() {
-                            match insert(text, target) {
+                            match insert(text, target, stopped) {
                                 Ok(()) => {
                                     recovery = None;
-                                    eprintln!("Retained text inserted.");
+                                    report("Retained text inserted.");
                                 }
-                                Err(error) => eprintln!("Insertion failed: {error:#}"),
+                                Err(error) => report(&format!("Insertion failed: {error:#}")),
                             }
                         }
                     } else {
-                        eprintln!("No retained transcript.");
+                        report("No retained transcript.");
                     }
                 }
                 _ => {}
@@ -226,12 +250,15 @@ pub fn run(config: Config) -> Result<()> {
         {
             if capture.failed() {
                 state = State::Idle;
-                eprintln!("Microphone failed; recording discarded. Check your input device.");
+                report("Microphone failed; recording discarded. Check your input device.");
             } else if capture.is_full()
                 || started.elapsed().as_secs() >= config.max_recording_seconds as u64
             {
-                eprintln!("Recording limit reached.");
-                finish_recording(&mut state, &pipeline, &tx);
+                if stopped.load(Ordering::Acquire) {
+                    return Ok(());
+                }
+                report("Recording limit reached.");
+                finish_recording(&mut state, &pipeline, &tx, &report);
             }
         }
         if let Ok(result) = rx.try_recv() {
@@ -242,47 +269,51 @@ pub fn run(config: Config) -> Result<()> {
                 canceled,
             } = previous
             {
-                if canceled {
-                    eprintln!("Ready.");
+                if canceled || stopped.load(Ordering::Acquire) {
+                    report("Ready.");
                     continue;
                 }
                 match result {
                     Ok(transcript) => {
-                        if transcript.cleanup_failed {
-                            eprintln!("Cleanup failed; keeping original transcription.");
-                        }
+                        let warning = if transcript.cleanup_failed {
+                            "Cleanup failed; using original transcription. "
+                        } else {
+                            ""
+                        };
                         let insertion = if focus_changed {
                             Err(anyhow::anyhow!("Focus changed during dictation"))
                         } else {
-                            insert(&transcript.text, target)
+                            insert(&transcript.text, target, stopped)
                         };
                         match insertion {
                             Ok(()) => {
                                 recovery = None;
-                                eprintln!("Inserted. Ready.");
+                                report(&format!("{warning}Inserted. Ready."));
                             }
                             Err(error) => {
                                 recovery = Some(transcript.text);
-                                eprintln!(
-                                    "{error:#}. Text retained in memory. Focus the intended field and press Ctrl+Alt+V to retry, or Ctrl+Alt+Esc to discard. If any text was inserted, remove it before retrying."
-                                );
+                                report(&format!(
+                                    "{warning}{error:#}. Text retained in memory. Focus the intended field and press Ctrl+Alt+V to retry, or Ctrl+Alt+Esc to discard. If any text was inserted, remove it before retrying."
+                                ));
                             }
                         }
                     }
-                    Err(error) => {
-                        eprintln!("Transcription failed: {error:#}. Ready to record again.")
-                    }
+                    Err(error) => report(&format!(
+                        "Transcription failed: {error:#}. Ready to record again."
+                    )),
                 }
             }
         }
         thread::sleep(Duration::from_millis(15));
     }
+    Ok(())
 }
 
 fn finish_recording(
     state: &mut State,
     pipeline: &Arc<Pipeline>,
     tx: &mpsc::Sender<Result<Transcript>>,
+    report: &impl Fn(&str),
 ) {
     let State::Recording {
         capture,
@@ -305,16 +336,17 @@ fn finish_recording(
             thread::spawn(move || {
                 let _ = tx.send(pipeline.transcribe(wav, "dictation.wav"));
             });
-            eprintln!("Transcribing…");
+            report("Transcribing…");
         }
-        Err(error) => eprintln!("Recording discarded: {error:#}"),
+        Err(error) => report(&format!("Recording discarded: {error:#}")),
     }
 }
 
-fn insert(text: &str, target: Target) -> Result<()> {
+fn insert(text: &str, target: Target, stopped: &AtomicBool) -> Result<()> {
     // Let the user release the shortcut before synthesizing ordinary text.
     let started = Instant::now();
     loop {
+        ensure!(!stopped.load(Ordering::Acquire), "Dictation disabled");
         ensure!(
             unsafe { GetAsyncKeyState(VK_ESCAPE as i32) } >= 0,
             "Insertion canceled"
@@ -367,7 +399,7 @@ fn insert(text: &str, target: Target) -> Result<()> {
         })
         .collect();
     ensure!(
-        Target::current() == Some(target),
+        !stopped.load(Ordering::Acquire) && Target::current() == Some(target),
         "Target field changed; insertion skipped"
     );
     // SAFETY: inputs contains initialized INPUT structures and lives through SendInput.

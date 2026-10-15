@@ -1,16 +1,21 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
 use saykey::{audio::MAX_AUDIO_BYTES, config::Config, pipeline::Pipeline};
-use std::{io::Read, path::PathBuf};
+use std::{io::Read, path::PathBuf, process::ExitCode};
 
 #[derive(Parser)]
-#[command(version, about = "Windows hotkey dictation in Rust")]
+#[command(
+    version,
+    about = "Saykey desktop dictation. Launch without a command to open the Windows app."
+)]
 struct Args {
-    /// TOML configuration file; otherwise use built-in defaults.
+    /// TOML configuration file (desktop also checks beside the executable).
     #[arg(long, global = true)]
     config: Option<PathBuf>,
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand)]
@@ -23,10 +28,56 @@ enum Command {
     Check,
 }
 
-fn main() -> Result<()> {
+fn main() -> ExitCode {
+    // Windows GUI executables have no console on double-click. CLI invocations
+    // attach to the calling terminal without creating a new console window.
+    #[cfg(windows)]
+    if std::env::args_os().len() > 1 {
+        unsafe {
+            windows_sys::Win32::System::Console::AttachConsole(
+                windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS,
+            );
+        }
+    }
     let args = Args::parse();
+    let desktop = args.command.is_none();
+    let result = execute(args);
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            #[cfg(windows)]
+            if desktop {
+                use windows_sys::Win32::UI::WindowsAndMessaging::{
+                    MB_ICONERROR, MB_OK, MessageBoxW,
+                };
+                let message: Vec<u16> = format!("{error:#}\0").encode_utf16().collect();
+                let title: Vec<u16> = "Saykey\0".encode_utf16().collect();
+                unsafe {
+                    MessageBoxW(
+                        std::ptr::null_mut(),
+                        message.as_ptr(),
+                        title.as_ptr(),
+                        MB_OK | MB_ICONERROR,
+                    );
+                }
+            }
+            #[cfg(not(windows))]
+            let _ = desktop;
+            eprintln!("{error:#}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn execute(args: Args) -> Result<()> {
+    let Some(command) = args.command else {
+        #[cfg(windows)]
+        return saykey::desktop::run(args.config);
+        #[cfg(not(windows))]
+        anyhow::bail!("The desktop app requires Windows. Use transcribe or check on this OS.");
+    };
     let config = Config::load(args.config.as_deref())?;
-    match args.command {
+    match command {
         Command::Check => {
             config.validate()?;
             println!("Configuration valid. No audio recorded or API requests made.");

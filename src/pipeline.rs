@@ -48,6 +48,20 @@ impl Pipeline {
             ensure!(!value.trim().is_empty(), "API key must not be empty");
             Some(value)
         };
+        Self::with_api_key(config, key)
+    }
+
+    /// Use an explicitly supplied session credential without changing the process environment.
+    pub fn with_api_key(config: Config, key: Option<String>) -> Result<Self> {
+        config.validate()?;
+        ensure!(
+            key.as_ref().is_none_or(|value| !value.trim().is_empty()),
+            "API key must not be empty"
+        );
+        ensure!(
+            config.api_key_env.is_empty() || key.is_some(),
+            "An API key is required for this provider"
+        );
         Ok(Self {
             config,
             key,
