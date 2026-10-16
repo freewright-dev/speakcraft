@@ -26,6 +26,8 @@ enum Command {
     Transcribe { file: PathBuf },
     /// Validate configuration without recording audio or contacting a provider.
     Check,
+    /// List microphone names for the `microphone` setting (Windows).
+    Devices,
 }
 
 fn main() -> ExitCode {
@@ -98,6 +100,14 @@ fn execute(args: Args) -> Result<()> {
                 eprintln!("Cleanup failed; returning the original transcript.");
             }
             println!("{}", result.text);
+        }
+        Command::Devices => {
+            #[cfg(windows)]
+            for name in saykey::windows::microphones() {
+                println!("{name}");
+            }
+            #[cfg(not(windows))]
+            anyhow::bail!("Microphone listing requires Windows.");
         }
         Command::Run => {
             #[cfg(windows)]

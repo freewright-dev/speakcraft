@@ -1,5 +1,18 @@
-use saykey::{audio::encode_wav, config::Config, pipeline::Pipeline};
-use std::{io::Cursor, thread, time::Duration};
+use saykey::{
+    audio::{downsample, encode_wav},
+    config::{Config, Insertion},
+    pipeline::Pipeline,
+};
+use std::{
+    borrow::Cow,
+    io::Cursor,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread,
+    time::{Duration, Instant},
+};
 use tiny_http::{Header, Response, Server};
 
 type Requests = Vec<(String, Vec<u8>)>;
@@ -207,7 +220,7 @@ fn transcription_uploads_audio_language_and_dictionary_without_cleanup() {
     assert_eq!(requests[0].0, "/v1/audio/transcriptions");
     let body = String::from_utf8_lossy(&requests[0].1);
     for field in [
-        "name=\"model\"\r\n\r\nwhisper-1",
+        "name=\"model\"\r\n\r\ngpt-4o-mini-transcribe",
         "name=\"response_format\"\r\n\r\njson",
         "name=\"language\"\r\n\r\nde",
         "name=\"prompt\"\r\n\r\nZürich, CPAL",
@@ -228,6 +241,7 @@ fn cleanup_returns_edited_text_and_sends_dictation_as_data() {
         ),
     ]);
     config.cleanup = true;
+    config.dictionary = vec!["Zürich".into(), "Saykey".into()];
     let result = Pipeline::new(config)
         .unwrap()
         .transcribe(wav(), "voice.wav")
@@ -237,6 +251,9 @@ fn cleanup_returns_edited_text_and_sends_dictation_as_data() {
     let requests = server.join().unwrap();
     assert_eq!(requests[1].0, "/v1/chat/completions");
     let body: serde_json::Value = serde_json::from_slice(&requests[1].1).unwrap();
+    assert!(body["messages"][0]["content"].as_str().unwrap().ends_with(
+        "Spell these names and terms exactly as written when they occur: Zürich, Saykey."
+    ));
     assert_eq!(body["messages"][1]["role"], "user");
     assert_eq!(
         body["messages"][1]["content"],
@@ -267,14 +284,14 @@ fn unavailable_or_empty_cleanup_never_loses_the_original_transcript() {
 
 #[test]
 fn transcription_rejects_errors_redirects_and_empty_or_malformed_responses() {
-    for reply in [
-        (401, r#"{"text":"must not insert"}"#),
-        (500, "failure"),
-        (302, r#"{"text":"must not insert"}"#),
-        (200, "invalid JSON"),
-        (200, r#"{"text":"  "}"#),
+    for replies in [
+        vec![(401, r#"{"text":"must not insert"}"#)],
+        vec![(500, "failure"), (500, "failure")],
+        vec![(302, r#"{"text":"must not insert"}"#)],
+        vec![(200, "invalid JSON")],
+        vec![(200, r#"{"text":"  "}"#)],
     ] {
-        let (config, server) = provider(vec![reply]);
+        let (config, server) = provider(replies);
         assert!(
             Pipeline::new(config)
                 .unwrap()
@@ -283,4 +300,145 @@ fn transcription_rejects_errors_redirects_and_empty_or_malformed_responses() {
         );
         server.join().unwrap();
     }
+}
+
+#[test]
+fn transient_failures_are_retried_once_and_client_errors_are_not() {
+    let (config, server) = provider(vec![(503, "busy"), (200, r#"{"text":"Second attempt."}"#)]);
+    let result = Pipeline::new(config)
+        .unwrap()
+        .transcribe(wav(), "voice.wav")
+        .unwrap();
+    assert_eq!(result.text, "Second attempt.");
+    assert_eq!(server.join().unwrap().len(), 2);
+
+    let (config, server) = provider(vec![(429, "slow down"), (502, "bad gateway")]);
+    let error = Pipeline::new(config)
+        .unwrap()
+        .transcribe(wav(), "voice.wav")
+        .err()
+        .expect("two transient failures must fail");
+    assert!(format!("{error:#}").contains("HTTP 502"), "{error:#}");
+    assert_eq!(server.join().unwrap().len(), 2);
+
+    // A retry would first wait a second, so a fast error proves there was none.
+    let (config, server) = provider(vec![(400, "bad request")]);
+    let started = Instant::now();
+    assert!(
+        Pipeline::new(config)
+            .unwrap()
+            .transcribe(wav(), "voice.wav")
+            .is_err()
+    );
+    assert!(started.elapsed() < Duration::from_millis(900));
+    assert_eq!(server.join().unwrap().len(), 1);
+}
+
+#[test]
+fn cancellation_stops_retries_and_cleanup_after_the_request_in_flight() {
+    for (status, body) in [(503, "busy"), (200, r#"{"text":"Raw transcript."}"#)] {
+        let server = Server::http("127.0.0.1:0").unwrap();
+        let config = Config {
+            base_url: format!("http://{}/v1", server.server_addr()),
+            api_key_env: String::new(),
+            cleanup: true,
+            ..Config::default()
+        };
+        let canceled = Arc::new(AtomicBool::new(false));
+        let cancel = Arc::clone(&canceled);
+        let worker = thread::spawn(move || {
+            let request = server
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap();
+            // The user cancels while the provider is still working.
+            cancel.store(true, Ordering::Release);
+            request
+                .respond(Response::from_string(body).with_status_code(status))
+                .unwrap();
+            assert!(
+                server
+                    .recv_timeout(Duration::from_millis(1500))
+                    .unwrap()
+                    .is_none(),
+                "A retry or cleanup request was sent after cancellation"
+            );
+        });
+        let result =
+            Pipeline::new(config)
+                .unwrap()
+                .transcribe_cancelable(wav(), "voice.wav", &canceled);
+        if status == 200 {
+            assert_eq!(result.unwrap().text, "Raw transcript.");
+        } else {
+            assert!(result.is_err());
+        }
+        worker.join().unwrap();
+    }
+}
+
+#[test]
+fn downsampling_averages_to_16_khz_and_keeps_lower_rates() {
+    let samples: Vec<i16> = (0..48_000).map(|i| [300, 600, 900][i % 3]).collect();
+    let (output, rate) = downsample(&samples, 48_000);
+    assert_eq!((rate, output.len()), (16_000, 16_000));
+    assert!(output.iter().all(|&sample| sample == 600));
+    let (output, rate) = downsample(&samples[..44_100], 44_100);
+    assert_eq!((rate, output.len()), (16_000, 16_000));
+    for rate in [16_000, 8_000] {
+        let (output, kept) = downsample(&samples[..100], rate);
+        assert!(matches!(output, Cow::Borrowed(_)));
+        assert_eq!(kept, rate);
+    }
+    let (output, rate) = downsample(&samples[..48_000], 48_000);
+    encode_wav(&output, rate).unwrap();
+}
+
+#[test]
+fn settings_round_trip_through_a_saved_file_and_old_files_still_load() {
+    let directory = std::env::temp_dir().join(format!("saykey-settings-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("config.toml");
+    let config = Config {
+        language: Some("de".into()),
+        dictionary: vec!["Zürich".into()],
+        cleanup: true,
+        microphone: Some("USB Microphone".into()),
+        sounds: false,
+        overlay: false,
+        insertion: Insertion::Paste,
+        ..Config::default()
+    };
+    config.save(&path).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains("insertion = \"paste\""), "{text}");
+    let loaded = Config::load(Some(&path)).unwrap();
+    assert_eq!(loaded.language.as_deref(), Some("de"));
+    assert_eq!(loaded.dictionary, ["Zürich"]);
+    assert_eq!(loaded.microphone.as_deref(), Some("USB Microphone"));
+    assert!(loaded.cleanup && !loaded.sounds && !loaded.overlay);
+    assert_eq!(loaded.insertion, Insertion::Paste);
+    assert!(
+        Config {
+            max_recording_seconds: 0,
+            ..Config::default()
+        }
+        .save(&path)
+        .is_err()
+    );
+    std::fs::remove_dir_all(&directory).unwrap();
+
+    let old: Config =
+        toml::from_str("transcription_model = \"whisper-1\"\ncleanup = true").unwrap();
+    assert!(old.sounds && old.overlay && old.microphone.is_none());
+    assert_eq!(old.insertion, Insertion::Type);
+    assert!(toml::from_str::<Config>("insertion = \"clipboard\"").is_err());
+    assert!(
+        Config {
+            microphone: Some(" ".into()),
+            ..Config::default()
+        }
+        .validate()
+        .is_err()
+    );
 }

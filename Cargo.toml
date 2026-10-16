@@ -5,6 +5,10 @@ edition = "2024"
 description = "Windows hotkey dictation in Rust"
 license = "MIT"
 
+[features]
+# End-to-end testing only: SAYKEY_TEST_AUDIO=<16-bit WAV> replaces the microphone.
+test-audio = []
+
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
@@ -20,7 +24,7 @@ tiny_http = "0.12"
 [target.'cfg(windows)'.dependencies]
 cpal = "0.15"
 eframe = { version = "0.33", default-features = false, features = ["default_fonts", "glow", "accesskit"] }
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Console", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Media_Audio", "Win32_Security", "Win32_Security_Credentials", "Win32_System_Console", "Win32_System_DataExchange", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_HiDpi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse"] }
 
 [target.'cfg(windows)'.dev-dependencies]
 egui_kittest = { version = "0.33", default-features = false, features = ["eframe"] }

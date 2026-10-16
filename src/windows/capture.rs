@@ -1,4 +1,4 @@
-use crate::audio::{MAX_AUDIO_BYTES, encode_wav};
+use crate::audio::{MAX_AUDIO_BYTES, downsample, encode_wav};
 use anyhow::{Context, Result, bail, ensure};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{
@@ -7,18 +7,47 @@ use std::sync::{
 };
 
 pub struct Capture {
-    stream: cpal::Stream,
+    /// None when a test build reads audio from a file instead of a device.
+    stream: Option<cpal::Stream>,
     samples: Arc<Mutex<Vec<i16>>>,
     failed: Arc<AtomicBool>,
     full: Arc<AtomicBool>,
     sample_rate: u32,
+    pub device: String,
+}
+
+/// Names of the input devices Windows currently offers.
+pub fn microphones() -> Vec<String> {
+    cpal::default_host()
+        .input_devices()
+        .map(|devices| devices.filter_map(|device| device.name().ok()).collect())
+        .unwrap_or_default()
+}
+
+/// The named device, else the Windows default, else the first available input:
+/// Windows can report no default while a usable microphone is connected.
+fn select_device(name: Option<&str>) -> Result<cpal::Device> {
+    let host = cpal::default_host();
+    if let Some(name) = name {
+        return host
+            .input_devices()?
+            .find(|device| device.name().is_ok_and(|device| device == name))
+            .with_context(|| {
+                format!("Microphone \"{name}\" is not connected. Choose another in Saykey or Windows Sound settings.")
+            });
+    }
+    host.default_input_device()
+        .or_else(|| host.input_devices().ok()?.next())
+        .context("No microphone found. Connect one and check Windows Sound settings.")
 }
 
 impl Capture {
-    pub fn start(seconds: u32) -> Result<Self> {
-        let device = cpal::default_host()
-            .default_input_device()
-            .context("No default microphone. Check Windows Sound settings.")?;
+    pub fn start(seconds: u32, microphone: Option<&str>) -> Result<Self> {
+        #[cfg(feature = "test-audio")]
+        if let Some(path) = std::env::var_os("SAYKEY_TEST_AUDIO") {
+            return Self::from_file(path.as_ref(), seconds);
+        }
+        let device = select_device(microphone)?;
         // Try 16 kHz mono first, then the device default. Speech recognition
         // resamples to 16 kHz anyway, and a single channel keeps the upload
         // small, but many WASAPI shared-mode drivers expose only their mix
@@ -45,6 +74,7 @@ impl Capture {
         supported: cpal::SupportedStreamConfig,
         seconds: u32,
     ) -> Result<Self> {
+        let name = device.name().unwrap_or_else(|_| "microphone".into());
         let config: cpal::StreamConfig = supported.clone().into();
         ensure!(
             config.channels > 0 && config.sample_rate.0 > 0,
@@ -69,11 +99,39 @@ impl Capture {
         }?;
         stream.play().context("Cannot start microphone")?;
         Ok(Self {
-            stream,
+            stream: Some(stream),
             samples,
             failed,
             full,
             sample_rate: config.sample_rate.0,
+            device: name,
+        })
+    }
+
+    /// End-to-end tests on machines without a microphone: replay a WAV file
+    /// as if it had been captured. Only compiled with the `test-audio` feature.
+    #[cfg(feature = "test-audio")]
+    fn from_file(path: &std::path::Path, seconds: u32) -> Result<Self> {
+        let mut reader = hound::WavReader::open(path).context("Cannot open SAYKEY_TEST_AUDIO")?;
+        let spec = reader.spec();
+        ensure!(
+            spec.channels > 0 && spec.bits_per_sample == 16,
+            "SAYKEY_TEST_AUDIO must be 16-bit PCM"
+        );
+        let interleaved = reader.samples::<i16>().collect::<Result<Vec<_>, _>>()?;
+        let limit = spec.sample_rate as usize * seconds as usize;
+        let samples: Vec<i16> = interleaved
+            .chunks_exact(spec.channels as usize)
+            .take(limit)
+            .map(|frame| (frame.iter().map(|&s| s as i32).sum::<i32>() / frame.len() as i32) as i16)
+            .collect();
+        Ok(Self {
+            stream: None,
+            samples: Arc::new(Mutex::new(samples)),
+            failed: Arc::new(AtomicBool::new(false)),
+            full: Arc::new(AtomicBool::new(false)),
+            sample_rate: spec.sample_rate,
+            device: format!("test audio {}", path.display()),
         })
     }
 
@@ -95,7 +153,8 @@ impl Capture {
             .samples
             .lock()
             .map_err(|_| anyhow::anyhow!("Audio buffer unavailable"))?;
-        encode_wav(&samples, self.sample_rate)
+        let (samples, sample_rate) = downsample(&samples, self.sample_rate);
+        encode_wav(&samples, sample_rate)
     }
 }
 

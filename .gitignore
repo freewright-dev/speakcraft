@@ -3,3 +3,4 @@
 *.wav
 .env
 /.amp/portals/
+__pycache__/

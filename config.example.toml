@@ -1,7 +1,7 @@
 # Copy to config.toml. No API key belongs in this file.
 base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"
-transcription_model = "whisper-1"
+transcription_model = "gpt-4o-mini-transcribe"
 # Optional ISO-639-1 language; omit for automatic detection.
 # language = "de"
 dictionary = ["Wispr Flow", "Rust", "Zürich"]
@@ -11,7 +11,15 @@ cleanup = false
 cleanup_model = "gpt-4o-mini"
 max_recording_seconds = 120
 
+# Input name from `saykey devices`; omit for the Windows default.
+# microphone = "Microphone (USB Audio)"
+sounds = true
+overlay = true
+# "type" keeps the clipboard untouched; "paste" is instant and restores it.
+insertion = "type"
+
 # A local OpenAI-compatible server can be used instead:
 # base_url = "http://127.0.0.1:8080/v1"
 # api_key_env = "" # explicitly allow an unauthenticated local server
+# transcription_model = "whisper-1"
 # Models and API support depend on your server.

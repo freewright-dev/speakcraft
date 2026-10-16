@@ -1,4 +1,8 @@
-use crate::{config::Config, pipeline::Pipeline, windows};
+use crate::{
+    config::{Config, Insertion},
+    pipeline::Pipeline,
+    windows,
+};
 use anyhow::{Context, Result};
 use eframe::egui::{self, Color32, RichText};
 use std::{
@@ -13,13 +17,15 @@ use std::{
 };
 
 pub fn run(config_path: Option<PathBuf>) -> Result<()> {
-    let path = config_path.or_else(|| {
-        std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|dir| dir.join("config.toml")))
-            .filter(|path| path.exists())
-    });
+    let _instance = windows::SingleInstance::acquire()?;
+    let beside_exe = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("config.toml")));
+    // Settings are saved where they were loaded from, else beside the executable.
+    let save_path = config_path.clone().or_else(|| beside_exe.clone());
+    let path = config_path.or_else(|| beside_exe.filter(|path| path.exists()));
     let config = Config::load(path.as_deref());
+    let saved_key = windows::credential::load();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Saykey")
@@ -30,7 +36,15 @@ pub fn run(config_path: Option<PathBuf>) -> Result<()> {
     eframe::run_native(
         "Saykey",
         options,
-        Box::new(move |cc| Ok(Box::new(Desktop::new(config, path, &cc.egui_ctx)))),
+        Box::new(move |cc| {
+            Ok(Box::new(Desktop::new(
+                config,
+                path,
+                save_path,
+                saved_key,
+                &cc.egui_ctx,
+            )))
+        }),
     )
     .map_err(|error| anyhow::anyhow!("Cannot open Saykey desktop window: {error}"))
 }
@@ -49,9 +63,14 @@ struct Worker {
 struct Desktop {
     config: Config,
     source: String,
+    save_path: Option<PathBuf>,
     language: String,
     api_key: String,
     authenticated: bool,
+    /// Store the typed key in Windows Credential Manager when enabling.
+    remember_key: bool,
+    key_saved: bool,
+    microphones: Vec<String>,
     worker: Option<Worker>,
     ready: bool,
     status: String,
@@ -59,7 +78,13 @@ struct Desktop {
 }
 
 impl Desktop {
-    fn new(config: Result<Config>, path: Option<PathBuf>, ctx: &egui::Context) -> Self {
+    fn new(
+        config: Result<Config>,
+        path: Option<PathBuf>,
+        save_path: Option<PathBuf>,
+        saved_key: Result<Option<String>>,
+        ctx: &egui::Context,
+    ) -> Self {
         ctx.set_visuals(egui::Visuals::light());
         ctx.style_mut(|style| {
             style.visuals.disabled_alpha = 0.75;
@@ -73,7 +98,7 @@ impl Desktop {
                 .text_styles
                 .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
         });
-        let (config, error) = match config {
+        let (config, mut error) = match config {
             Ok(config) => (config, None),
             Err(error) => (
                 Config::default(),
@@ -82,20 +107,30 @@ impl Desktop {
                 )),
             ),
         };
+        let saved_key = saved_key.unwrap_or_else(|key_error| {
+            error.get_or_insert_with(|| format!("{key_error:#}"));
+            None
+        });
+        let loaded = path.map_or_else(
+            || "Using built-in defaults.".to_owned(),
+            |path| format!("Loaded {}.", path.display()),
+        );
         Self {
-            source: path.map_or_else(
-                || "Using built-in defaults. Settings below apply to this session only.".into(),
-                |path| {
-                    format!(
-                        "Configuration: {}. Edits apply to this session only.",
-                        path.display()
-                    )
-                },
-            ),
+            source: match &save_path {
+                Some(save) => format!(
+                    "{loaded} Settings are saved to {} when you enable dictation.",
+                    save.display()
+                ),
+                None => format!("{loaded} Settings apply to this session only."),
+            },
+            save_path,
             language: config.language.clone().unwrap_or_default(),
             authenticated: !config.api_key_env.is_empty(),
             config,
-            api_key: String::new(),
+            remember_key: saved_key.is_some(),
+            key_saved: saved_key.is_some(),
+            api_key: saved_key.unwrap_or_default(),
+            microphones: windows::microphones(),
             worker: None,
             ready: false,
             status:
@@ -129,11 +164,29 @@ impl Desktop {
         } else {
             None
         };
+        // Saving is a convenience: failures are shown but do not block dictation.
+        let mut problems = vec![];
+        if let Some(path) = &self.save_path
+            && let Err(error) = config.save(path)
+        {
+            problems.push(format!("{error:#}"));
+        }
+        match (&key, self.remember_key) {
+            (Some(key), true) => match windows::credential::save(key) {
+                Ok(()) => self.key_saved = true,
+                Err(error) => problems.push(format!("{error:#}")),
+            },
+            (_, false) if self.key_saved => match windows::credential::delete() {
+                Ok(()) => self.key_saved = false,
+                Err(error) => problems.push(format!("{error:#}")),
+            },
+            _ => {}
+        }
         let stop = Arc::new(AtomicBool::new(false));
         let signal = Arc::clone(&stop);
         let (tx, events) = mpsc::channel();
         let ctx = ctx.clone();
-        self.error = None;
+        self.error = (!problems.is_empty()).then(|| problems.join(" "));
         self.ready = false;
         self.status = "Starting dictation…".into();
         let worker = thread::spawn(move || {
@@ -252,11 +305,16 @@ impl eframe::App for Desktop {
                         ui.add(egui::TextEdit::singleline(&mut self.config.transcription_model).desired_width(f32::INFINITY)).labelled_by(label.id);
                         ui.checkbox(&mut self.authenticated, "Provider requires an API key");
                         if self.authenticated {
-                            let label = ui.label("API key — this session only");
+                            let label = ui.label("API key");
                             ui.add(egui::TextEdit::singleline(&mut self.api_key).password(true)
                                 .hint_text("Paste your API key here").desired_width(f32::INFINITY)).labelled_by(label.id);
+                            ui.checkbox(&mut self.remember_key, "Remember this key on this PC (Windows Credential Manager)");
                             let env = if self.config.api_key_env.is_empty() { "OPENAI_API_KEY" } else { &self.config.api_key_env };
-                            ui.small(format!("Not saved to disk. Leave blank to use {env} from the environment."));
+                            ui.small(if self.remember_key {
+                                "Saved for your Windows account when you enable dictation; never written to the settings file.".to_owned()
+                            } else {
+                                format!("Used for this session only. Leave blank to use {env} from the environment.")
+                            });
                         }
                         let label = ui.label("Language (optional)");
                         ui.add(egui::TextEdit::singleline(&mut self.language)
@@ -266,6 +324,36 @@ impl eframe::App for Desktop {
                             let label = ui.label("Cleanup model");
                             ui.add(egui::TextEdit::singleline(&mut self.config.cleanup_model).desired_width(f32::INFINITY)).labelled_by(label.id);
                         }
+                        let label = ui.label("Microphone");
+                        ui.horizontal(|ui| {
+                            let selected = match &self.config.microphone {
+                                None => "Windows default".to_owned(),
+                                Some(name) if self.microphones.contains(name) => name.clone(),
+                                Some(name) => format!("{name} (not connected)"),
+                            };
+                            egui::ComboBox::from_id_salt("microphone")
+                                .selected_text(selected)
+                                .width(ui.available_width() - 90.0)
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut self.config.microphone, None, "Windows default");
+                                    for name in &self.microphones {
+                                        ui.selectable_value(&mut self.config.microphone, Some(name.clone()), name);
+                                    }
+                                })
+                                .response
+                                .labelled_by(label.id);
+                            if ui.button("Refresh").clicked() {
+                                self.microphones = windows::microphones();
+                            }
+                        });
+                        if self.microphones.is_empty() {
+                            ui.small("No microphone found. Connect one, then click Refresh.");
+                        }
+                        ui.checkbox(&mut self.config.sounds, "Play sounds when recording starts and stops");
+                        ui.checkbox(&mut self.config.overlay, "Show recording status on screen");
+                        ui.label("Insert text by");
+                        ui.radio_value(&mut self.config.insertion, Insertion::Type, "Typing: clipboard untouched; about 100 characters per second");
+                        ui.radio_value(&mut self.config.insertion, Insertion::Paste, "Pasting: instant; previous clipboard text is restored");
                     });
                     ui.add_space(6.0);
                     egui::Frame::group(ui.style()).fill(Color32::WHITE).show(ui, |ui| {
@@ -274,7 +362,7 @@ impl eframe::App for Desktop {
                         ui.label("Enable dictation, then focus the text field where you want to write.");
                         egui::Grid::new("shortcuts").spacing([24.0, 8.0]).show(ui, |ui| {
                             for (key, action) in [
-                                ("Ctrl + Alt + Space", "Start / finish recording"),
+                                ("Ctrl + Alt + Space", "Hold to talk, or tap to start / finish"),
                                 ("Ctrl + Alt + Esc", "Cancel / clear retained text"),
                                 ("Ctrl + Alt + V", "Retry retained text insertion"),
                             ] {
@@ -286,6 +374,9 @@ impl eframe::App for Desktop {
                     });
                     ui.label("Audio is sent to your configured provider. AI cleanup also sends the transcript. Provider charges and privacy policies apply.");
                     ui.small("Minimize this window to keep dictating. Closing it stops dictation. No tray icon or background autostart.");
+                    if self.key_saved {
+                        ui.small("An API key is saved in Windows Credential Manager. Uncheck \u{201c}Remember this key\u{201d} and enable dictation to remove it.");
+                    }
                     ui.small(&self.source);
                 });
             });
@@ -324,7 +415,7 @@ mod tests {
         };
         let mut harness = Harness::builder()
             .with_size([620.0, 820.0])
-            .build_eframe(|cc| Desktop::new(Ok(config), None, &cc.egui_ctx));
+            .build_eframe(|cc| Desktop::new(Ok(config), None, None, Ok(None), &cc.egui_ctx));
         harness.run();
         harness.get_by_label("Dictation disabled");
         harness.get_by_label("Enable dictation").click();
@@ -356,11 +447,11 @@ mod tests {
         harness.run();
 
         harness
-            .get_by_role_and_label(Role::PasswordInput, "API key — this session only")
+            .get_by_role_and_label(Role::PasswordInput, "API key")
             .click();
         harness.run();
         harness
-            .get_by_role_and_label(Role::PasswordInput, "API key — this session only")
+            .get_by_role_and_label(Role::PasswordInput, "API key")
             .type_text("local-test-credential");
         harness.run();
         for _ in 0..2 {
