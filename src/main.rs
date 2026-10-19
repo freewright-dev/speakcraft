@@ -2,13 +2,13 @@
 
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
-use saykey::{audio::MAX_AUDIO_BYTES, config::Config, pipeline::Pipeline};
+use speakcraft::{audio::MAX_AUDIO_BYTES, config::Config, pipeline::Pipeline};
 use std::{io::Read, path::PathBuf, process::ExitCode};
 
 #[derive(Parser)]
 #[command(
     version,
-    about = "Saykey desktop dictation. Launch without a command to open the Windows app."
+    about = "SpeakCraft desktop dictation. Launch without a command to open the Windows app."
 )]
 struct Args {
     /// TOML configuration file (desktop also checks beside the executable).
@@ -53,7 +53,7 @@ fn main() -> ExitCode {
                     MB_ICONERROR, MB_OK, MessageBoxW,
                 };
                 let message: Vec<u16> = format!("{error:#}\0").encode_utf16().collect();
-                let title: Vec<u16> = "Saykey\0".encode_utf16().collect();
+                let title: Vec<u16> = "SpeakCraft\0".encode_utf16().collect();
                 unsafe {
                     MessageBoxW(
                         std::ptr::null_mut(),
@@ -74,7 +74,7 @@ fn main() -> ExitCode {
 fn execute(args: Args) -> Result<()> {
     let Some(command) = args.command else {
         #[cfg(windows)]
-        return saykey::desktop::run(args.config);
+        return speakcraft::desktop::run(args.config);
         #[cfg(not(windows))]
         anyhow::bail!("The desktop app requires Windows. Use transcribe or check on this OS.");
     };
@@ -103,7 +103,7 @@ fn execute(args: Args) -> Result<()> {
         }
         Command::Devices => {
             #[cfg(windows)]
-            for name in saykey::windows::microphones() {
+            for name in speakcraft::windows::microphones() {
                 println!("{name}");
             }
             #[cfg(not(windows))]
@@ -111,7 +111,7 @@ fn execute(args: Args) -> Result<()> {
         }
         Command::Run => {
             #[cfg(windows)]
-            saykey::windows::run(config)?;
+            speakcraft::windows::run(config)?;
             #[cfg(not(windows))]
             anyhow::bail!("Live dictation requires Windows. Use transcribe or check on this OS.");
         }

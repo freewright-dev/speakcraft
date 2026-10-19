@@ -1,13 +1,13 @@
-"""Windows end-to-end check for Saykey: real global shortcuts, microphone, and insertion.
+"""Windows end-to-end check for SpeakCraft: real global shortcuts, microphone, and insertion.
 
-Runs saykey.exe against a local mock provider and types only into windows this
+Runs speakcraft.exe against a local mock provider and types only into windows this
 script creates (a Tk test window and a Notepad file in a temporary directory).
 It synthesizes keyboard input, so do not type while it runs. The clipboard's
 text is saved and restored.
 
-    python scripts/windows_e2e.py [--exe target/release/saykey.exe] [--play speech.wav]
+    python scripts/windows_e2e.py [--exe target/release/speakcraft.exe] [--play speech.wav]
     cargo build --release --locked --features test-audio --target-dir target/e2e
-    python scripts/windows_e2e.py --exe target/e2e/release/saykey.exe --audio speech.wav
+    python scripts/windows_e2e.py --exe target/e2e/release/speakcraft.exe --audio speech.wav
 
 With a real microphone, --play plays a WAV through the speakers during each
 recording so the microphone hears something. Without one, --audio replays a
@@ -123,15 +123,15 @@ class Provider:
 
 
 def overlay_visible():
-    hwnd = user32.FindWindowW("SaykeyOverlay", None)
+    hwnd = user32.FindWindowW("SpeakCraftOverlay", None)
     return bool(hwnd) and bool(user32.IsWindowVisible(hwnd))
 
 
-class Saykey:
+class SpeakCraft:
     def __init__(self, exe, config, audio=None):
         env = dict(os.environ)
         if audio:
-            env["SAYKEY_TEST_AUDIO"] = str(Path(audio).resolve())
+            env["SPEAKCRAFT_TEST_AUDIO"] = str(Path(audio).resolve())
         self.proc = subprocess.Popen(
             [exe, "--config", str(config), "run"], env=env,
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
@@ -172,12 +172,12 @@ class Ui:
 
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Saykey E2E target")
+        self.root.title("SpeakCraft E2E target")
         self.root.geometry("640x240+80+80")
         self.text = tk.Text(self.root, font=("Segoe UI", 12))
         self.text.pack(fill="both", expand=True)
         self.other = tk.Toplevel(self.root)
-        self.other.title("Saykey E2E other field")
+        self.other.title("SpeakCraft E2E other field")
         self.other.geometry("400x120+760+80")
         self.other_text = tk.Text(self.other)
         self.other_text.pack(fill="both", expand=True)
@@ -245,7 +245,7 @@ class Run:
         self.results = []
 
     def launch(self, config):
-        app = Saykey(self.args.exe, config, self.args.audio)
+        app = SpeakCraft(self.args.exe, config, self.args.audio)
         app.wait_for("Ready.")
         return app
 
@@ -254,7 +254,7 @@ class Run:
             "base_url": self.provider.url,
             "api_key_env": "",
             "transcription_model": "e2e-model",
-            "dictionary": ["Saykey"],
+            "dictionary": ["SpeakCraft"],
             "max_recording_seconds": 30,
             **extra,
         }
@@ -295,7 +295,7 @@ class Run:
             self.app.wait_for("Recording…", since=since)
             time.sleep(1.2)
             assert overlay_visible(), "Status overlay not shown while recording"
-            assert user32.GetForegroundWindow() == target, "Overlay or Saykey took focus"
+            assert user32.GetForegroundWindow() == target, "Overlay or SpeakCraft took focus"
             assert not any("Hands-free" in line for line in self.app.lines[since:]), "Hold treated as tap"
         finally:
             for vk in (VK_SPACE, VK_MENU, VK_CONTROL):
@@ -308,9 +308,9 @@ class Run:
         assert not overlay_visible(), "Overlay still visible after insertion"
 
     def insert_unicode(self):
-        expected = "Grüße aus Zürich – café, naïve ✓ Saykey"
+        expected = "Grüße aus Zürich – café, naïve ✓ SpeakCraft"
         self.provider.text = expected
-        sentinel = f"saykey-e2e-sentinel-{time.time()}"
+        sentinel = f"speakcraft-e2e-sentinel-{time.time()}"
         self.ui.clipboard(sentinel)
         self.ui.focus_main()
         before = len(self.provider.requests)
@@ -323,7 +323,7 @@ class Run:
         assert len(self.provider.requests) == before + 1, "Expected exactly one upload"
         path, body = self.provider.requests[-1]
         assert path.endswith("/audio/transcriptions"), path
-        assert b'name="model"' in body and b"e2e-model" in body and b"Saykey" in body
+        assert b'name="model"' in body and b"e2e-model" in body and b"SpeakCraft" in body
         assert body.count(b"RIFF") == 1, "Upload is not a WAV file"
         rate = int.from_bytes(body[body.index(b"RIFF") + 24:body.index(b"RIFF") + 28], "little")
         assert rate <= 16_000, f"Uploaded {rate} Hz audio; expected at most 16 kHz"
@@ -411,7 +411,7 @@ class Run:
         self.use_config(insertion="paste")
         expected = "Pasted: Grüße 🎤 café"
         self.provider.text = expected
-        sentinel = f"saykey-e2e-paste-sentinel-{time.time()}"
+        sentinel = f"speakcraft-e2e-paste-sentinel-{time.time()}"
         self.ui.clipboard(sentinel)
         self.ui.focus_main()
         since = self.record()
@@ -498,7 +498,7 @@ class Run:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--exe", default=str(Path(__file__).resolve().parents[1] / "target/release/saykey.exe"))
+    parser.add_argument("--exe", default=str(Path(__file__).resolve().parents[1] / "target/release/speakcraft.exe"))
     parser.add_argument("--play", help="WAV file to play through the speakers while recording")
     parser.add_argument("--audio", help="16-bit WAV replacing the microphone (test-audio builds)")
     parser.add_argument("--live", action="store_true", help="also dictate through the real provider")
@@ -512,7 +512,7 @@ def main():
 
     def worker():
         original = ui.clipboard()
-        with tempfile.TemporaryDirectory(prefix="saykey-e2e-") as workdir:
+        with tempfile.TemporaryDirectory(prefix="speakcraft-e2e-") as workdir:
             run = None
             try:
                 run = Run(args, ui, provider, Path(workdir))

@@ -12,7 +12,7 @@ use windows_sys::Win32::{
     },
 };
 
-const TARGET: &str = "Saykey/API key";
+const TARGET: &str = "SpeakCraft/API key";
 
 pub fn load() -> Result<Option<String>> {
     load_from(TARGET)
@@ -53,7 +53,7 @@ fn load_from(target: &str) -> Result<Option<String>> {
 fn save_to(target: &str, key: &str) -> Result<()> {
     ensure!(!key.trim().is_empty(), "API key must not be empty");
     let mut target = wide(target);
-    let mut user = wide("Saykey");
+    let mut user = wide("SpeakCraft");
     // SAFETY: every pointer in the credential outlives the CredWriteW call.
     let saved = unsafe {
         let mut credential: CREDENTIALW = std::mem::zeroed();
@@ -91,8 +91,8 @@ mod tests {
 
     #[test]
     fn credentials_round_trip_and_delete() {
-        // A throwaway name so a real saved Saykey key is never touched.
-        let target = format!("Saykey/test credential {}", std::process::id());
+        // A throwaway name so a real saved SpeakCraft key is never touched.
+        let target = format!("SpeakCraft/test credential {}", std::process::id());
         assert!(load_from(&target).unwrap().is_none());
         save_to(&target, "sk-test-Grüße").unwrap();
         assert_eq!(

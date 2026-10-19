@@ -11,7 +11,7 @@ cleanup = false
 cleanup_model = "gpt-4o-mini"
 max_recording_seconds = 120
 
-# Input name from `saykey devices`; omit for the Windows default.
+# Input name from `speakcraft devices`; omit for the Windows default.
 # microphone = "Microphone (USB Audio)"
 sounds = true
 overlay = true

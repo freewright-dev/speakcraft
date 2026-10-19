@@ -2,7 +2,7 @@
 
 [README](../README.md) · [Usage](usage.md) · [Configuration](configuration.md) · [Changelog](../CHANGELOG.md)
 
-Use the source archive or local repository, not just the prebuilt executable. Run commands from the directory containing `Cargo.toml`; its folder name does not affect the `saykey` package or executable name. Dependencies are recorded in `Cargo.lock`; keep `--locked` for repeatable dependency resolution. The initial MVP was built with Rust 1.99.0 on Linux. The native Windows checks below passed with Rust 1.97.1 (`x86_64-pc-windows-msvc`); a minimum supported Rust version has not been established.
+Use the source archive or local repository, not just the prebuilt executable. Run commands from the directory containing `Cargo.toml`; its folder name does not affect the `speakcraft` package or executable name. Dependencies are recorded in `Cargo.lock`; keep `--locked` for repeatable dependency resolution. The initial MVP was built with Rust 1.99.0 on Linux. The native Windows checks below passed with Rust 1.97.1 (`x86_64-pc-windows-msvc`); a minimum supported Rust version has not been established.
 
 ## Windows build
 
@@ -10,16 +10,16 @@ Install stable Rust using [rustup](https://rustup.rs/) and Visual Studio Build T
 
 ```powershell
 cargo build --release --locked
-.\target\release\saykey.exe --help
-.\target\release\saykey.exe --version
-.\target\release\saykey.exe --config config.example.toml check
+.\target\release\speakcraft.exe --help
+.\target\release\speakcraft.exe --version
+.\target\release\speakcraft.exe --config config.example.toml check
 ```
 
-These commands build and validate configuration without uploading audio. Double-click `target\release\saykey.exe` to open the desktop window without a console. The binary uses the Windows GUI subsystem and attaches to a parent console for CLI arguments. Follow the [usage guide](usage.md) to set provider credentials and test real dictation. The original Windows archive was cross-built with the GNU target on Linux; the new desktop build is verified natively on Windows.
+These commands build and validate configuration without uploading audio. Double-click `target\release\speakcraft.exe` to open the desktop window without a console. The binary uses the Windows GUI subsystem and attaches to a parent console for CLI arguments. Follow the [usage guide](usage.md) to set provider credentials and test real dictation. The original Windows archive was cross-built with the GNU target on Linux; the new desktop build is verified natively on Windows.
 
 `src/desktop.rs` owns the egui/eframe window and session settings. A worker thread runs the existing Windows hotkey loop and sends status/errors back to the window. Disabling or closing signals the worker to stop, release its shortcuts, discard capture/recovery state, and suppress pending insertion. Already-sent HTTP requests are not recalled. The settings window is excluded from dictation targets.
 
-The package rename produces `target\release\saykey.exe`; Cargo may leave an old `rust-dictate.exe` in the build directory. Use the new path rather than assuming the old executable was updated. The local build does not create a ZIP, checksum manifest, installer, or published release.
+The package rename produces `target\release\speakcraft.exe`; Cargo may leave an old `rust-dictate.exe` in the build directory. Use the new path rather than assuming the old executable was updated. The local build does not create a ZIP, checksum manifest, installer, or published release.
 
 ## Linux development and Windows cross-build
 
@@ -34,7 +34,7 @@ rustup target add x86_64-pc-windows-gnu
 cargo build --release --locked --target x86_64-pc-windows-gnu
 ```
 
-The output is `target/x86_64-pc-windows-gnu/release/saykey.exe`. The source repository also includes an executable `.agents/setup` script for Amp's Linux orbs. It installs missing cross-build tools, prepares Rust components, and fetches locked dependencies. It is idempotent and does not start the app or configure provider credentials. It is stored locally with this project; it is not configured on a remote project's default branch.
+The output is `target/x86_64-pc-windows-gnu/release/speakcraft.exe`. The source repository also includes an executable `.agents/setup` script for Amp's Linux orbs. It installs missing cross-build tools, prepares Rust components, and fetches locked dependencies. It is idempotent and does not start the app or configure provider credentials. It is stored locally with this project; it is not configured on a remote project's default branch.
 
 ## Automated checks
 
@@ -53,13 +53,13 @@ cargo build --release --locked --target x86_64-pc-windows-gnu
 
 The 12 integration tests in `tests/contracts.rs` cover several areas. Audio: in-memory PCM/WAV encoding, recording boundaries, and 16 kHz downsampling. Configuration: validation, and saving then reloading settings, including older files without the new fields. Provider calls: multipart upload fields, Unicode responses, optional cleanup with dictionary terms, and failure fallback. Errors: rejection of malformed responses and redirects, the single retry for transient failures, and that cancellation suppresses retries and cleanup. Also: session-key authentication and CLI output/exit codes. HTTP fixtures bind ephemeral loopback ports. They use no real microphone, credentials, paid API, or speech model.
 
-On Windows, a unit test in `src/windows/credential.rs` saves, replaces, reads, and deletes a throwaway Credential Manager entry (`Saykey/test credential <pid>`); it never touches a real saved key. The egui accessibility test in `src/desktop.rs` clicks controls and types into fields to check missing-key errors, invalid language settings, enabling/disabling dictation, and re-enabling after shortcut release. Close other running Saykey dictation sessions before running it: the test reserves the real global shortcuts briefly, but does not record or submit audio. Default, enabled/cleanup, and missing-credential native windows were also rendered and inspected locally.
+On Windows, a unit test in `src/windows/credential.rs` saves, replaces, reads, and deletes a throwaway Credential Manager entry (`SpeakCraft/test credential <pid>`); it never touches a real saved key. The egui accessibility test in `src/desktop.rs` clicks controls and types into fields to check missing-key errors, invalid language settings, enabling/disabling dictation, and re-enabling after shortcut release. Close other running SpeakCraft dictation sessions before running it: the test reserves the real global shortcuts briefly, but does not record or submit audio. Default, enabled/cleanup, and missing-credential native windows were also rendered and inspected locally.
 
 A passing API test confirms transport and response handling, **not** transcription accuracy, model adherence to cleanup instructions, or dictation in a Windows application. The existing Linux CLI smoke check also confirmed exact Unicode stdout through a local HTTP fixture. Cross-compilation only confirms that Windows code compiles and links.
 
 ## Windows end-to-end harness
 
-`scripts/windows_e2e.py` (Python 3.10+, standard library only) drives a real `saykey.exe run` with synthesized global shortcuts. It uses a local mock provider that records every request, its own Tk test windows, and one Notepad file in a temporary directory. It types only into windows it creates, and it restores your clipboard's text afterwards. Do not use the keyboard while it runs. Close other Saykey instances first.
+`scripts/windows_e2e.py` (Python 3.10+, standard library only) drives a real `speakcraft.exe run` with synthesized global shortcuts. It uses a local mock provider that records every request, its own Tk test windows, and one Notepad file in a temporary directory. It types only into windows it creates, and it restores your clipboard's text afterwards. Do not use the keyboard while it runs. Close other SpeakCraft instances first.
 
 ```powershell
 # With a working microphone; --play makes it hear speech through the speakers.
@@ -68,14 +68,14 @@ python scripts\windows_e2e.py --play speech.wav
 
 # Without a microphone: replay a 16-bit WAV in place of capture.
 cargo build --release --locked --features test-audio --target-dir target\e2e
-python scripts\windows_e2e.py --exe target\e2e\release\saykey.exe --audio speech.wav
+python scripts\windows_e2e.py --exe target\e2e\release\speakcraft.exe --audio speech.wav
 
 # Add --live to also dictate once through the provider in OPENAI_API_KEY (paid).
 ```
 
 Scenarios: tap-to-toggle with Unicode text, 16 kHz upload, and an unchanged clipboard; hold-to-talk, with the overlay visible without stealing focus and hidden after insertion; cancel while recording (no upload) and while processing; provider error; focus change followed by Ctrl+Alt+V recovery; insertion waiting for held modifiers; second instance refused; Notepad typing and Notepad pasting checked from the saved file; paste mode restoring the clipboard; the recording limit; optionally one live dictation.
 
-The `test-audio` feature makes `SAYKEY_TEST_AUDIO=<file.wav>` replace the microphone. It exercises everything except device capture. Use a separate `--target-dir` as shown, and never ship a build that has it enabled. Generate test speech with Windows TTS, for example `System.Speech.Synthesis.SpeechSynthesizer.SetOutputToWaveFile` with a 16-bit mono format.
+The `test-audio` feature makes `SPEAKCRAFT_TEST_AUDIO=<file.wav>` replace the microphone. It exercises everything except device capture. Use a separate `--target-dir` as shown, and never ship a build that has it enabled. Generate test speech with Windows TTS, for example `System.Speech.Synthesis.SpeechSynthesizer.SetOutputToWaveFile` with a 16-bit mono format.
 
 On 2026-10-16 all 13 scenarios passed with replayed audio and `--live`. The test machine had no active capture device, so live microphone capture is still unverified.
 

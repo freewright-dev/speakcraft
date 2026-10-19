@@ -71,7 +71,7 @@ impl Config {
     pub fn save(&self, path: &Path) -> Result<()> {
         self.validate()?;
         let text = format!(
-            "# Saved by Saykey. No API key belongs in this file.
+            "# Saved by SpeakCraft. No API key belongs in this file.
 {}",
             toml::to_string(self).context("Cannot serialize configuration")?
         );

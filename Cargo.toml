@@ -1,12 +1,12 @@
 [package]
-name = "saykey"
+name = "speakcraft"
 version = "0.1.0"
 edition = "2024"
 description = "Windows hotkey dictation in Rust"
 license = "MIT"
 
 [features]
-# End-to-end testing only: SAYKEY_TEST_AUDIO=<16-bit WAV> replaces the microphone.
+# End-to-end testing only: SPEAKCRAFT_TEST_AUDIO=<16-bit WAV> replaces the microphone.
 test-audio = []
 
 [dependencies]

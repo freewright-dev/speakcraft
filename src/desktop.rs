@@ -28,13 +28,13 @@ pub fn run(config_path: Option<PathBuf>) -> Result<()> {
     let saved_key = windows::credential::load();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("Saykey")
+            .with_title("SpeakCraft")
             .with_inner_size([620.0, 820.0])
             .with_min_inner_size([440.0, 540.0]),
         ..Default::default()
     };
     eframe::run_native(
-        "Saykey",
+        "SpeakCraft",
         options,
         Box::new(move |cc| {
             Ok(Box::new(Desktop::new(
@@ -46,7 +46,7 @@ pub fn run(config_path: Option<PathBuf>) -> Result<()> {
             )))
         }),
     )
-    .map_err(|error| anyhow::anyhow!("Cannot open Saykey desktop window: {error}"))
+    .map_err(|error| anyhow::anyhow!("Cannot open SpeakCraft desktop window: {error}"))
 }
 
 enum Event {
@@ -274,7 +274,7 @@ impl eframe::App for Desktop {
             .frame(egui::Frame::new().fill(Color32::from_rgb(248, 250, 253)).inner_margin(24.0))
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.heading(RichText::new("Saykey").size(32.0).strong());
+                    ui.heading(RichText::new("SpeakCraft").size(32.0).strong());
                     ui.label("Your voice, wherever you type.");
                     ui.add_space(8.0);
                     egui::Frame::group(ui.style()).fill(Color32::WHITE).show(ui, |ui| {
@@ -410,7 +410,7 @@ mod tests {
     fn desktop_reports_setup_errors_and_can_enable_disable_and_restart() {
         let config = Config {
             base_url: "http://127.0.0.1:9/v1".into(),
-            api_key_env: "SAYKEY_TEST_MISSING_CREDENTIAL".into(),
+            api_key_env: "SPEAKCRAFT_TEST_MISSING_CREDENTIAL".into(),
             ..Config::default()
         };
         let mut harness = Harness::builder()
@@ -424,7 +424,7 @@ mod tests {
             "Dictation disabled. No new audio will be recorded or inserted.",
         );
         harness
-            .get_by_label_contains("Set the SAYKEY_TEST_MISSING_CREDENTIAL environment variable");
+            .get_by_label_contains("Set the SPEAKCRAFT_TEST_MISSING_CREDENTIAL environment variable");
         wait_for(&mut harness, "Enable dictation");
 
         harness
