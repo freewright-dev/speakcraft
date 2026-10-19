@@ -75,10 +75,20 @@ Double-click `target\release\speakcraft.exe` to open the desktop window. The `ru
 - [Changelog](CHANGELOG.md)
 - [Example configuration](config.example.toml)
 
-## References and license
+## References
 
 - [Wispr Flow features](https://wisprflow.ai/features): dictation across apps, cleanup, dictionary, and styles.
 - [Wispr Flow setup guide](https://docs.wisprflow.ai/articles/3152211871-setup-guide): Windows permissions and shortcut-driven dictation.
 - [OpenAI transcription API](https://platform.openai.com/docs/api-reference/audio/createTranscription): multipart request and JSON response contract.
 
-These references describe public behavior, not Wispr Flow's internal architecture. SpeakCraft is licensed under the [MIT License](LICENSE).
+These references describe public behavior, not Wispr Flow's internal architecture.
+
+## License
+
+SpeakCraft is free software: you can redistribute it and/or modify it under the terms of the
+[GNU General Public License](LICENSE) as published by the Free Software Foundation, either
+version 3 of the License, or (at your option) any later version.
+
+SpeakCraft is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+[LICENSE](LICENSE) file for details.

@@ -3,7 +3,7 @@ name = "speakcraft"
 version = "0.1.0"
 edition = "2024"
 description = "Windows hotkey dictation in Rust"
-license = "MIT"
+license = "GPL-3.0-or-later"
 
 [features]
 # End-to-end testing only: SPEAKCRAFT_TEST_AUDIO=<16-bit WAV> replaces the microphone.
